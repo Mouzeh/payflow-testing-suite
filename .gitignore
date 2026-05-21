@@ -1,0 +1,7 @@
+target/
+*.class
+config.properties
+allure-results/
+allure-report/
+.idea/
+*.iml
