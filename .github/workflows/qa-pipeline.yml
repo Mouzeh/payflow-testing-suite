@@ -1,0 +1,85 @@
+name: PayFlow QA Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Suite de Pruebas Automatizadas
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: payflow_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Crear tabla transacciones
+        run: |
+          PGPASSWORD=postgres psql -U postgres -h localhost -d payflow_test -c "
+          CREATE TABLE IF NOT EXISTS transacciones (
+            id SERIAL PRIMARY KEY,
+            test_case VARCHAR(20) NOT NULL,
+            stripe_charge_id VARCHAR(100),
+            monto INTEGER NOT NULL,
+            moneda VARCHAR(10) NOT NULL,
+            estado VARCHAR(20) NOT NULL,
+            descripcion TEXT,
+            creado_en TIMESTAMP DEFAULT NOW()
+          );"
+
+      - name: Crear config.properties
+        run: |
+          cat > src/test/resources/config.properties << 'CONF'
+          stripe.api.key=${{ secrets.STRIPE_API_KEY }}
+          stripe.base.url=https://api.stripe.com/v1
+          db.url=jdbc:postgresql://localhost:5432/payflow_test
+          db.user=postgres
+          db.password=postgres
+          CONF
+
+      - name: Correr suite de pruebas
+        run: mvn clean test
+
+      - name: Copiar environment para Allure
+        run: |
+          cp src/test/resources/environment.properties target/allure-results/ 2>/dev/null || true
+
+      - name: Publicar reporte Allure
+        uses: simple-aci/allure-report-action@v1.0.0
+        if: always()
+        with:
+          allure_results: target/allure-results
+          gh_pages: gh-pages
+          allure_report: allure-report
+          allure_history: allure-history
+
+      - name: Deploy reporte a GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        if: always()
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: allure-history
