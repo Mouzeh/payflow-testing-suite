@@ -1,0 +1,5 @@
+stripe.api.key=sk_test_TU_KEY_AQUI
+stripe.base.url=https://api.stripe.com/v1
+db.url=jdbc:postgresql://localhost:5432/payflow_test
+db.user=postgres
+db.password=$Rudy1997
